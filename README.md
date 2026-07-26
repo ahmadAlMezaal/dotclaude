@@ -65,6 +65,9 @@ optin/             per-project rules, linked only where they apply
   deployment.md      scoped to CI, containers, and deploy config
 skills/            procedures, loaded when the task matches the description
   open-pr/           diff, verify, write the body, create the PR
+  add-tests/         pick the behaviours, write them, run them honestly
+  migrate-to-mmkv/   AsyncStorage or SecureStore to MMKV, data included
+  new-workspace-package/  scaffold and wire a packages/* workspace
 install.sh         idempotent linker for the global layer
 link.sh            links optin rules into the project you are standing in
 ```
@@ -141,8 +144,27 @@ A skill should defer to the rules rather than repeat them. `skills/open-pr`
 does not restate the commit format, it points at `rules/git.md`. Restating is
 how the two drift apart and start contradicting each other.
 
-Skills are global here, like `rules/`. Anything that applies to only one
-project belongs in that project's own `.claude/skills/`.
+Skills are global here, like `rules/`. There is no `optin-skills/`, because a
+skill only loads when its description matches the request, so a stack-specific
+one stays dormant everywhere it does not apply. `migrate-to-mmkv` says React
+Native in its description and opens by checking the repo actually is one. That
+is cheaper than another symlink layer.
+
+Anything that applies to only one project belongs in that project's own
+`.claude/skills/`, not here.
+
+## Writing a skill
+
+- The `description` is the trigger and the most important line in the file.
+  Write it as the phrases you would actually type, including the ones you would
+  type when you have forgotten the tool's name. Name the stack if it is
+  stack-specific, and say what it covers.
+- Open by checking the skill applies, and stop if it does not.
+- Sequence the work. Numbered steps in the order they happen.
+- Defer to the rules rather than repeating them. Repetition is how two files
+  drift into contradicting each other.
+- Say where the honest failure modes are. "Quote both results", "say which
+  platform it was checked on".
 
 ## Writing a rule
 
