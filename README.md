@@ -30,6 +30,14 @@ enough.
 | --- | --- |
 | `CLAUDE.md` | `~/.claude/CLAUDE.md` |
 | `rules/` | `~/.claude/rules/shared` |
+| `skills/<name>/` | `~/.claude/skills/<name>/` |
+
+Skills are linked one directory at a time, not as a single directory link,
+because a skill is discovered at `~/.claude/skills/<name>/SKILL.md` and one
+extra level of nesting would hide it. A skill renamed or deleted in the repo
+leaves a broken link behind, so the script prunes those on the next run, but
+only ones pointing back into this repo. Skills from anywhere else are left
+alone.
 
 - An existing real `~/.claude/CLAUDE.md` is moved to `~/.claude/CLAUDE.md.backup`
   before the link is made. That happens once. On later runs the target is
@@ -51,11 +59,14 @@ rules/             global rules, apply in every repo on the machine
   typescript.md      scoped to **/*.{ts,tsx}
   testing.md         scoped to test files and runner config
   git.md             unconditional
-optin/             per-project rules, linked by hand only where they apply
+optin/             per-project rules, linked only where they apply
   monorepo.md        apps/packages workspaces
   react-native.md    Expo and React Native apps
   deployment.md      scoped to CI, containers, and deploy config
-install.sh         idempotent linker
+skills/            procedures, loaded when the task matches the description
+  open-pr/           diff, verify, write the body, create the PR
+install.sh         idempotent linker for the global layer
+link.sh            links optin rules into the project you are standing in
 ```
 
 The split matters. `rules/` is only for things that are true in every single
@@ -85,26 +96,53 @@ the first place, which is why the writing rules below exist.
 `@path` import loads at launch whatever the session turns out to be about, so it
 buys nothing.
 
-## Adding an optin rule to a project
+## Using this in a new repo
+
+For everything in `rules/` and `skills/`, nothing. They are global. Clone the
+new project, open Claude in it, and the TypeScript, testing, and git rules are
+already loaded. There is no per-repo setup step.
+
+Only the opt-ins need a decision. From the project root:
 
 ```sh
-mkdir -p .claude/rules
-ln -sfn ~/dotclaude/optin/react-native.md .claude/rules/react-native.md
+~/dotclaude/link.sh                          # list what is available
+~/dotclaude/link.sh react-native             # link one
+~/dotclaude/link.sh monorepo deployment      # or several
 ```
 
-Then commit the symlink, or add `.claude/rules/` to the project's
-`.gitignore` if the rest of the team does not share this setup. Git stores
-symlinks fine, but the link only resolves on a machine that has this repo
-cloned at the same path.
+That creates `.claude/rules/<name>.md` as a symlink. To drop one, delete the
+symlink. Rerunning is harmless.
 
-Link several where they apply:
+Then commit the symlink, or add `.claude/rules/` to the project's `.gitignore`
+if the rest of the team does not share this setup. Git stores symlinks fine,
+but the link only resolves on a machine that has this repo cloned at the same
+path.
 
-```sh
-ln -sfn ~/dotclaude/optin/monorepo.md   .claude/rules/monorepo.md
-ln -sfn ~/dotclaude/optin/deployment.md .claude/rules/deployment.md
-```
+## Rules or a skill
 
-To drop one, delete the symlink.
+Two different mechanisms, and putting something in the wrong one is why it gets
+ignored.
+
+A **rule** is a standing constraint on how code is written. It is either always
+loaded or loaded because you touched a file matching its `paths`. You do not
+invoke it and it does not know what you are trying to do. "Arrow functions
+assigned to a const" is a rule.
+
+A **skill** is a procedure for a kind of task. It is loaded when its
+`description` matches what you asked for, so the description is the trigger and
+is the most important line in the file. "Open a PR" is a skill: check the diff,
+run the suite, write the body, create it.
+
+The test is whether it constrains code or sequences work. `Use MMKV, never
+AsyncStorage` constrains code, so it is a rule. `Add a new package to the
+workspace` sequences work, so it is a skill.
+
+A skill should defer to the rules rather than repeat them. `skills/open-pr`
+does not restate the commit format, it points at `rules/git.md`. Restating is
+how the two drift apart and start contradicting each other.
+
+Skills are global here, like `rules/`. Anything that applies to only one
+project belongs in that project's own `.claude/skills/`.
 
 ## Writing a rule
 

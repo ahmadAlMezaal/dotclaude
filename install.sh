@@ -3,8 +3,9 @@
 # Links this repo into ~/.claude so every project on this machine picks up the
 # same instructions. Safe to run repeatedly.
 #
-#   CLAUDE.md  ->  ~/.claude/CLAUDE.md
-#   rules/     ->  ~/.claude/rules/shared
+#   CLAUDE.md   ->  ~/.claude/CLAUDE.md
+#   rules/      ->  ~/.claude/rules/shared
+#   skills/<n>  ->  ~/.claude/skills/<n>     one link per skill
 #
 # Never touches ~/.claude/settings.json, which holds auth and machine state.
 
@@ -13,6 +14,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 CLAUDE_DIR="${CLAUDE_HOME:-$HOME/.claude}"
 RULES_DIR="$CLAUDE_DIR/rules"
+SKILLS_DIR="$CLAUDE_DIR/skills"
 LINK_MD="$CLAUDE_DIR/CLAUDE.md"
 LINK_RULES="$RULES_DIR/shared"
 STAMP="$(date +%Y%m%d%H%M%S)"
@@ -59,6 +61,40 @@ fi
 ln -sfn "$REPO_DIR/rules" "$LINK_RULES"
 info "rules/ -> $LINK_RULES"
 
+# --- skills/ -----------------------------------------------------------------
+# Skills are discovered at ~/.claude/skills/<name>/SKILL.md, so each skill is
+# linked individually rather than linking the directory as a whole. A skill
+# renamed or deleted in the repo leaves a broken link behind, so prune those
+# first, but only ones that point back into this repo.
+if [ -d "$REPO_DIR/skills" ]; then
+  mkdir -p "$SKILLS_DIR"
+
+  for link in "$SKILLS_DIR"/*; do
+    [ -L "$link" ] || continue
+    target="$(readlink "$link")"
+    case "$target" in
+      "$REPO_DIR"/skills/*)
+        if [ ! -e "$link" ]; then
+          rm "$link"
+          info "pruned stale skill link $(basename "$link")"
+        fi
+        ;;
+    esac
+  done
+
+  for skill in "$REPO_DIR"/skills/*/; do
+    [ -f "$skill/SKILL.md" ] || continue
+    name="$(basename "$skill")"
+    dest="$SKILLS_DIR/$name"
+    if [ -e "$dest" ] && [ ! -L "$dest" ]; then
+      mv "$dest" "$dest.backup.$STAMP"
+      info "backed up existing skill $name to $name.backup.$STAMP"
+    fi
+    ln -sfn "${skill%/}" "$dest"
+    info "skills/$name -> $dest"
+  done
+fi
+
 # --- verify ------------------------------------------------------------------
 [ -L "$LINK_MD" ]    || fail "$LINK_MD is not a symlink"
 [ -L "$LINK_RULES" ] || fail "$LINK_RULES is not a symlink"
@@ -70,6 +106,12 @@ for rule in "$REPO_DIR"/rules/*.md; do
   info "$(basename "$rule")"
 done
 
-printf '\nPer-project rules live in optin/ and are linked one at a time, e.g.\n'
-printf '  mkdir -p .claude/rules\n'
-printf '  ln -sfn %s/optin/react-native.md .claude/rules/react-native.md\n' "$REPO_DIR"
+if [ -d "$REPO_DIR/skills" ]; then
+  printf '\nSkills available in every project, loaded when the task matches:\n'
+  for skill in "$REPO_DIR"/skills/*/; do
+    [ -f "$skill/SKILL.md" ] && info "$(basename "$skill")"
+  done
+fi
+
+printf '\nPer-project rules live in optin/. Link them from a project root with:\n'
+printf '  %s/link.sh react-native monorepo\n' "$REPO_DIR"
